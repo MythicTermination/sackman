@@ -14,17 +14,17 @@ import software.bernie.geckolib.renderer.GeoRenderer;
 import software.bernie.geckolib.renderer.layer.GeoRenderLayer;
 
 public class CaveDwellerEyesLayer extends GeoRenderLayer<CaveDwellerEntity> {
-    public static ResourceLocation TEXTURE = new ResourceLocation(CaveDweller.MODID, "textures/entity/cave_dweller_eyes_texture" + Utils.getTextureAppend() + ".png");
+   public static ResourceLocation TEXTURE = new ResourceLocation(CaveDweller.MODID, "textures/entity/cave_dweller_eyes_texture" + Utils.getTextureAppend() + ".png");
 
-    public CaveDwellerEyesLayer(final GeoRenderer<CaveDwellerEntity> renderer) {
-        super(renderer);
-    }
+   public CaveDwellerEyesLayer(final GeoRenderer<CaveDwellerEntity> renderer) {
+      super(renderer);
+   }
 
-    @Override
-    public void render(final PoseStack poseStack, final CaveDwellerEntity animatable, final BakedGeoModel bakedModel, final RenderType renderType, final MultiBufferSource bufferSource, final VertexConsumer buffer, float partialTick, int packedLight, int packedOverlay) {
-        packedLight = 15728880;
-        RenderType eyesRenderType = RenderType.entityCutoutNoCull(TEXTURE);
+   @Override
+   public void render(final PoseStack poseStack, final CaveDwellerEntity animatable, final BakedGeoModel bakedModel, final RenderType renderType, final MultiBufferSource bufferSource, final VertexConsumer buffer, float partialTick, int packedLight, int packedOverlay) {
+      packedLight = 15728880;
+      RenderType eyesRenderType = RenderType.entityCutoutNoCull(TEXTURE);
 
-        this.getRenderer().reRender(getDefaultBakedModel(animatable), poseStack, bufferSource, animatable, eyesRenderType, bufferSource.getBuffer(eyesRenderType), partialTick, packedLight, OverlayTexture.NO_OVERLAY, 1.0F, 1.0F, 1.0F, 1.0F);
-    }
+      this.getRenderer().reRender(getDefaultBakedModel(animatable), poseStack, bufferSource, animatable, eyesRenderType, bufferSource.getBuffer(eyesRenderType), partialTick, packedLight, OverlayTexture.NO_OVERLAY, 1.0F, 1.0F, 1.0F, 1.0F);
+   }
 }

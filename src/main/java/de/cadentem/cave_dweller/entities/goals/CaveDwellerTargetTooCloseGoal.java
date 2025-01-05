@@ -7,49 +7,43 @@ import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
 import net.minecraft.world.entity.player.Player;
 
 public class CaveDwellerTargetTooCloseGoal extends NearestAttackableTargetGoal<Player> {
-    private final CaveDwellerEntity caveDweller;
-    private final float distanceThreshold;
+   private final CaveDwellerEntity caveDweller;
+   private final float distanceThreshold;
 
-    public CaveDwellerTargetTooCloseGoal(final CaveDwellerEntity mob, float distanceThreshold) {
-        super(mob, Player.class, false);
-        this.caveDweller = mob;
-        this.distanceThreshold = distanceThreshold;
-    }
+   public CaveDwellerTargetTooCloseGoal(CaveDwellerEntity mob, float distanceThreshold) {
+      super(mob, Player.class, false);
+      this.caveDweller = mob;
+      this.distanceThreshold = distanceThreshold;
+   }
 
-    @Override
-    public boolean canUse() {
-        if (!caveDweller.isInvisible()) {
-            LivingEntity target = caveDweller.level().getNearestPlayer(caveDweller, distanceThreshold);
+   public boolean canUse() {
+      if (!this.caveDweller.isInvisible()) {
+         LivingEntity target = this.caveDweller.level().getNearestPlayer(this.caveDweller, (double)this.distanceThreshold);
+         if (Utils.isValidPlayer(target)) {
+            this.target = target;
+            return true;
+         }
+      }
 
-            if (Utils.isValidTarget(target)) {
-                this.target = target;
-                return true;
-            }
-        }
+      return false;
+   }
 
-        return false;
-    }
+   public void start() {
+      this.caveDweller.setAggressive(true);
+      this.caveDweller.currentRoll = Roll.CHASE;
+      this.caveDweller.setTarget(this.target);
+      super.start();
+   }
 
-    @Override
-    public void start() {
-        caveDweller.setAggressive(true);
-        caveDweller.currentRoll = Roll.CHASE;
-        caveDweller.setTarget(target);
-        super.start();
-    }
+   public void stop() {
+      super.stop();
+   }
 
-    @Override
-    public void stop() {
-        super.stop();
-    }
+   public boolean canContinueToUse() {
+      return Utils.isValidPlayer(this.target);
+   }
 
-    @Override
-    public boolean canContinueToUse() {
-        return Utils.isValidTarget(target);
-    }
-
-    @Override
-    public void tick() {
-        super.tick();
-    }
+   public void tick() {
+      super.tick();
+   }
 }

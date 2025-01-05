@@ -4,20 +4,18 @@ import de.cadentem.cave_dweller.entities.CaveDwellerEntity;
 import net.minecraft.world.entity.ai.goal.Goal;
 
 public class CaveDwellerBreakInvisGoal extends Goal {
-    private final CaveDwellerEntity caveDweller;
+   private final CaveDwellerEntity caveDweller;
 
-    public CaveDwellerBreakInvisGoal(final CaveDwellerEntity caveDweller) {
-        this.caveDweller = caveDweller;
-    }
+   public CaveDwellerBreakInvisGoal(CaveDwellerEntity caveDweller) {
+      this.caveDweller = caveDweller;
+   }
 
-    @Override
-    public boolean canUse() {
-        return caveDweller.isInvisible() && !caveDweller.targetIsFacingMe;
-    }
+   public boolean  canUse() {
+      return this.caveDweller.isInvisible() && !this.caveDweller.targetIsFacingMe;
+   }
 
-    @Override
-    public void start() {
-        super.start();
-        caveDweller.setInvisible(false);
-    }
+   public void start() {
+      super.start();
+      this.caveDweller.setInvisible(false);
+   }
 }

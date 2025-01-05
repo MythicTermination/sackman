@@ -10,25 +10,30 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin(LivingEntity.class)
+@Mixin({LivingEntity.class})
 public abstract class MixinLivingEntity {
-    /** Give the Cave Dweller the depth strider effect */
-    @ModifyVariable(method = "travel", at = @At("STORE"), name = "f6")
-    public float fakeDepthStrider(float depthStriderBonus) {
-        if ((Object) this instanceof CaveDwellerEntity) {
-            return ServerConfig.DEPTH_STRIDER_BONUS.get().floatValue();
-        }
+   @ModifyVariable(
+      method = {"travel"},
+      at = @At("STORE"),
+      name = {"f6"}
+   )
+   public float fakeDepthStrider(float depthStriderBonus) {
+      if ((Object) this instanceof CaveDwellerEntity) {
+         return ServerConfig.DEPTH_STRIDER_BONUS.get().floatValue();
+      }
 
-        return depthStriderBonus;
-    }
+      return depthStriderBonus;
 
-    /** Currently needed to prevent the mob from sliding to its previously set target location */
-    @Inject(method = "travel", at = @At("HEAD"), cancellable = true)
-    public void pleaseStopMoving(final Vec3 travelVector, final CallbackInfo callback) {
-        if ((Object) this instanceof CaveDwellerEntity caveDweller) {
-            if (caveDweller.pleaseStopMoving) {
-                callback.cancel();
-            }
-        }
-    }
+   }
+
+      /** Currently needed to prevent the mob from sliding to its previously set target location */
+      @Inject(method = "travel", at = @At("HEAD"), cancellable = true)
+       public void pleaseStopMoving(final Vec3 travelVector, CallbackInfo callback) {
+         if ((Object) this instanceof CaveDwellerEntity caveDweller) {
+         if (caveDweller.pleaseStopMoving) {
+            callback.cancel();
+         }
+      }
+
+   }
 }

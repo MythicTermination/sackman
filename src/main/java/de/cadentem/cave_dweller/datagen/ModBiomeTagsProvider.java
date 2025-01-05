@@ -16,14 +16,14 @@ import org.jetbrains.annotations.Nullable;
 import java.util.concurrent.CompletableFuture;
 
 public class ModBiomeTagsProvider extends BiomeTagsProvider {
-    public static TagKey<Biome> CAVE_DWELLER_SURFACE_BIOMES = TagKey.create(Registries.BIOME, new ResourceLocation(CaveDweller.MODID, "cave_dweller_surface_biomes"));
+   public static TagKey<Biome> CAVE_DWELLER_SURFACE_BIOMES = TagKey.create(Registries.BIOME, new ResourceLocation(CaveDweller.MODID, "cave_dweller_surface_biomes"));
 
-    public ModBiomeTagsProvider(final PackOutput packOutput, final CompletableFuture<HolderLookup.Provider> registries, final String modId, @Nullable final ExistingFileHelper existingFileHelper) {
-        super(packOutput, registries, modId, existingFileHelper);
-    }
+   public ModBiomeTagsProvider(final PackOutput packOutput, final CompletableFuture<HolderLookup.Provider> registries, final String modId, @Nullable final ExistingFileHelper existingFileHelper) {
+      super(packOutput, registries, modId, existingFileHelper);
+   }
 
-    @Override
-    protected void addTags(final @NotNull HolderLookup.Provider provider) {
-        tag(CAVE_DWELLER_SURFACE_BIOMES).addOptionalTag(Tags.Biomes.IS_SPOOKY.location());
-    }
+   @Override
+   protected void addTags(final @NotNull HolderLookup.Provider provider) {
+      tag(CAVE_DWELLER_SURFACE_BIOMES).addOptionalTag(Tags.Biomes.IS_SPOOKY.location());
+   }
 }

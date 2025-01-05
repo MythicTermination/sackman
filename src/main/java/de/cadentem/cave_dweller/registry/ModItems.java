@@ -11,18 +11,18 @@ import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegistryObject;
 
 public class ModItems {
-    public static final DeferredRegister<Item> ITEMS = DeferredRegister.create(ForgeRegistries.ITEMS, CaveDweller.MODID);
-    public static final RegistryObject<Item> CAVE_DWELLER_SPAWN_EGG = ITEMS.register(
-            "cave_dweller_spawn_egg", () -> new ForgeSpawnEggItem(ModEntityTypes.CAVE_DWELLER, 12895428, 790333, new Item.Properties())
-    );
+   public static final DeferredRegister<Item> ITEMS = DeferredRegister.create(ForgeRegistries.ITEMS, CaveDweller.MODID);
+   public static final RegistryObject<Item> CAVE_DWELLER_SPAWN_EGG = ITEMS.register(
+           "cave_dweller_spawn_egg", () -> new ForgeSpawnEggItem(ModEntityTypes.CAVE_DWELLER, 12895428, 790333, new Item.Properties())
+   );
 
-    public static void register(IEventBus eventBus) {
-        ITEMS.register(eventBus);
-    }
+   public static void register(IEventBus eventBus) {
+      ITEMS.register(eventBus);
+   }
 
-    public static void addCreative(final BuildCreativeModeTabContentsEvent event) {
-        if (event.getTabKey() == CreativeModeTabs.SPAWN_EGGS) {
-            event.accept(ModItems.CAVE_DWELLER_SPAWN_EGG);
-        }
-    }
+   public static void addCreative(final BuildCreativeModeTabContentsEvent event) {
+      if (event.getTabKey() == CreativeModeTabs.SPAWN_EGGS) {
+         event.accept(ModItems.CAVE_DWELLER_SPAWN_EGG);
+      }
+   }
 }
