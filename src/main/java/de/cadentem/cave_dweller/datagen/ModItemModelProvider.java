@@ -6,12 +6,11 @@ import net.minecraftforge.client.model.generators.ItemModelProvider;
 import net.minecraftforge.common.data.ExistingFileHelper;
 
 public class ModItemModelProvider extends ItemModelProvider {
-    public ModItemModelProvider(final DataGenerator generator, final String modId, final ExistingFileHelper existingFileHelper) {
-        super(generator, modId, existingFileHelper);
-    }
+   public ModItemModelProvider(DataGenerator generator, String modId, ExistingFileHelper existingFileHelper) {
+      super(generator, modId, existingFileHelper);
+   }
 
-    @Override
-    protected void registerModels() {
-        withExistingParent(ModItems.CAVE_DWELLER_SPAWN_EGG.getId().getPath(), mcLoc("item/template_spawn_egg"));
-    }
+   protected void registerModels() {
+      this.withExistingParent(ModItems.CAVE_DWELLER_SPAWN_EGG.getId().getPath(), this.mcLoc("item/template_spawn_egg"));
+   }
 }

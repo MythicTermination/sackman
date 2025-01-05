@@ -4,17 +4,15 @@ import de.cadentem.cave_dweller.entities.CaveDwellerEntity;
 import net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal;
 
 public class CaveDwellerStrollGoal extends WaterAvoidingRandomStrollGoal {
-    public CaveDwellerStrollGoal(final CaveDwellerEntity mob, double speedModifier) {
-        super(mob, speedModifier);
-    }
+   public CaveDwellerStrollGoal(CaveDwellerEntity mob, double speedModifier) {
+      super(mob, speedModifier);
+   }
 
-    @Override
-    public boolean canUse() {
-        return ((CaveDwellerEntity) mob).currentRoll == Roll.STROLL && super.canUse();
-    }
+   public boolean  canUse() {
+      return ((CaveDwellerEntity)this.mob).currentRoll == Roll.STROLL && super. canUse();
+   }
 
-    @Override
-    public boolean canContinueToUse() {
-        return ((CaveDwellerEntity) mob).currentRoll == Roll.STROLL && super.canContinueToUse();
-    }
+   public boolean canContinueToUse() {
+      return ((CaveDwellerEntity)this.mob).currentRoll == Roll.STROLL && super.canContinueToUse();
+   }
 }

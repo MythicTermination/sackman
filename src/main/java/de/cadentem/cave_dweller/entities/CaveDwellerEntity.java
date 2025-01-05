@@ -1,14 +1,18 @@
 package de.cadentem.cave_dweller.entities;
 
 import de.cadentem.cave_dweller.config.ServerConfig;
-import de.cadentem.cave_dweller.entities.goals.*;
+import de.cadentem.cave_dweller.entities.goals.Roll;
 import de.cadentem.cave_dweller.network.CaveSound;
 import de.cadentem.cave_dweller.network.NetworkHandler;
 import de.cadentem.cave_dweller.registry.ModSounds;
 import de.cadentem.cave_dweller.util.Utils;
+import java.util.List;
+import java.util.Random;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Vec3i;
+import net.minecraft.core.BlockPos.MutableBlockPos;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
@@ -16,574 +20,551 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.util.Mth;
+import net.minecraft.world.DifficultyInstance;
 import net.minecraft.world.damagesource.DamageSource;
-import net.minecraft.world.entity.*;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityDimensions;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.MobSpawnType;
+import net.minecraft.world.entity.Pose;
+import net.minecraft.world.entity.SpawnGroupData;
+import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
-import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.entity.ai.navigation.WallClimberNavigation;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.ServerLevelAccessor;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.pathfinder.BlockPathTypes;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.common.ForgeMod;
 import net.minecraftforge.network.PacketDistributor;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import software.bernie.geckolib3.core.IAnimatable;
 import software.bernie.geckolib3.core.PlayState;
 import software.bernie.geckolib3.core.builder.AnimationBuilder;
-import software.bernie.geckolib3.core.builder.ILoopType;
 import software.bernie.geckolib3.core.builder.RawAnimation;
+import software.bernie.geckolib3.core.builder.ILoopType.EDefaultLoopTypes;
 import software.bernie.geckolib3.core.controller.AnimationController;
 import software.bernie.geckolib3.core.event.predicate.AnimationEvent;
 import software.bernie.geckolib3.core.manager.AnimationData;
 import software.bernie.geckolib3.core.manager.AnimationFactory;
 import software.bernie.geckolib3.util.GeckoLibUtil;
 
-import java.util.List;
-import java.util.Random;
-
 public class CaveDwellerEntity extends Monster implements IAnimatable {
-    private final AnimationFactory factory = GeckoLibUtil.createFactory(this);
+   private final AnimationFactory factory = GeckoLibUtil.createFactory(this);
+   private final RawAnimation CHASE;
+   private final RawAnimation CHASE_IDLE;
+   private final RawAnimation CROUCH_RUN;
+   private final RawAnimation CROUCH_IDLE;
+   private final RawAnimation CALM_RUN;
+   private final RawAnimation CALM_STILL;
+   private final RawAnimation IS_SPOTTED;
+   private final RawAnimation CRAWL;
+   private final RawAnimation FLEE;
+   public static final EntityDataAccessor<Boolean> FLEEING_ACCESSOR;
+   public static final EntityDataAccessor<Boolean> CROUCHING_ACCESSOR;
+   public static final EntityDataAccessor<Boolean> CRAWLING_ACCESSOR;
+   public static final EntityDataAccessor<Boolean> SPOTTED_ACCESSOR;
+   public static final EntityDataAccessor<Boolean> CLIMBING_ACCESSOR;
+   public Roll currentRoll;
+   public boolean isFleeing;
+   public boolean hasSpawned;
+   public boolean pleaseStopMoving;
+   public boolean targetIsFacingMe;
+   private int ticksTillRemove;
+   private int chaseSoundClock;
+   private boolean alreadyPlayedFleeSound;
+   private boolean alreadyPlayedSpottedSound;
+   private boolean startedPlayingChaseSound;
+   private boolean alreadyPlayedDeathSound;
 
-    private final RawAnimation CHASE = new RawAnimation("animation.cave_dweller.new_run", ILoopType.EDefaultLoopTypes.LOOP);
-    private final RawAnimation CHASE_IDLE = new RawAnimation("animation.cave_dweller.run_idle", ILoopType.EDefaultLoopTypes.LOOP);
-    private final RawAnimation CROUCH_RUN = new RawAnimation("animation.cave_dweller.crouch_run_new", ILoopType.EDefaultLoopTypes.LOOP);
-    private final RawAnimation CROUCH_IDLE = new RawAnimation("animation.cave_dweller.crouch_idle", ILoopType.EDefaultLoopTypes.LOOP);
-    private final RawAnimation CALM_RUN = new RawAnimation("animation.cave_dweller.calm_move", ILoopType.EDefaultLoopTypes.LOOP);
-    private final RawAnimation CALM_STILL = new RawAnimation("animation.cave_dweller.calm_idle", ILoopType.EDefaultLoopTypes.LOOP);
-    private final RawAnimation IS_SPOTTED = new RawAnimation("animation.cave_dweller.spotted", ILoopType.EDefaultLoopTypes.HOLD_ON_LAST_FRAME);
-    private final RawAnimation CRAWL = new RawAnimation("animation.cave_dweller.crawl", ILoopType.EDefaultLoopTypes.LOOP);
-    private final RawAnimation FLEE = new RawAnimation("animation.cave_dweller.flee", ILoopType.EDefaultLoopTypes.LOOP);
+   public static float updateRotation(float angle, float targetAngle, float maxIncrease) {
+      float f = Mth.wrapDegrees(targetAngle - angle);
+      if (f > maxIncrease) {
+         f = maxIncrease;
+      }
 
-    public static final EntityDataAccessor<Boolean> FLEEING_ACCESSOR = SynchedEntityData.defineId(CaveDwellerEntity.class, EntityDataSerializers.BOOLEAN);
-    public static final EntityDataAccessor<Boolean> CROUCHING_ACCESSOR = SynchedEntityData.defineId(CaveDwellerEntity.class, EntityDataSerializers.BOOLEAN);
-    public static final EntityDataAccessor<Boolean> CRAWLING_ACCESSOR = SynchedEntityData.defineId(CaveDwellerEntity.class, EntityDataSerializers.BOOLEAN);
-    public static final EntityDataAccessor<Boolean> SPOTTED_ACCESSOR = SynchedEntityData.defineId(CaveDwellerEntity.class, EntityDataSerializers.BOOLEAN);
-    public static final EntityDataAccessor<Boolean> CLIMBING_ACCESSOR = SynchedEntityData.defineId(CaveDwellerEntity.class, EntityDataSerializers.BOOLEAN);
+      if (f < -maxIncrease) {
+         f = -maxIncrease;
+      }
 
-    public Roll currentRoll = Roll.STROLL;
-    public boolean isFleeing;
-    /** To be able to create a path while spawning */
-    public boolean hasSpawned;
-    public boolean pleaseStopMoving;
-    public boolean targetIsFacingMe;
+      return angle + f;
+   }
 
-    private int ticksTillRemove;
-    private int chaseSoundClock;
-    private boolean alreadyPlayedFleeSound;
-    private boolean alreadyPlayedSpottedSound;
-    private boolean startedPlayingChaseSound;
-    private boolean alreadyPlayedDeathSound;
+   public boolean canRiderInteract() {
+      return false;
+   }
 
-    public CaveDwellerEntity(final EntityType<? extends CaveDwellerEntity> entityType, final Level level) {
-        super(entityType, level);
-        this.refreshDimensions();
-        this.ticksTillRemove = Utils.secondsToTicks(ServerConfig.TIME_UNTIL_LEAVE.get());
-        this.setPathfindingMalus(BlockPathTypes.UNPASSABLE_RAIL, 0.0f);
-    }
+   public boolean shouldRiderSit() {
+      return true;
+   }
 
-    @Override
-    public void onAddedToWorld() {
-        super.onAddedToWorld();
+   public CaveDwellerEntity(EntityType<? extends CaveDwellerEntity> entityType, Level level) {
+      super(entityType, level);
+      this.CHASE = new RawAnimation("animation.cave_dweller.new_run", EDefaultLoopTypes.LOOP);
+      this.CHASE_IDLE = new RawAnimation("animation.cave_dweller.run_idle", EDefaultLoopTypes.LOOP);
+      this.CROUCH_RUN = new RawAnimation("animation.cave_dweller.crouch_run_new", EDefaultLoopTypes.LOOP);
+      this.CROUCH_IDLE = new RawAnimation("animation.cave_dweller.crouch_idle", EDefaultLoopTypes.LOOP);
+      this.CALM_RUN = new RawAnimation("animation.cave_dweller.calm_move", EDefaultLoopTypes.LOOP);
+      this.CALM_STILL = new RawAnimation("animation.cave_dweller.calm_idle", EDefaultLoopTypes.LOOP);
+      this.IS_SPOTTED = new RawAnimation("animation.cave_dweller.spotted", EDefaultLoopTypes.HOLD_ON_LAST_FRAME);
+      this.CRAWL = new RawAnimation("animation.cave_dweller.crawl", EDefaultLoopTypes.LOOP);
+      this.FLEE = new RawAnimation("animation.cave_dweller.flee", EDefaultLoopTypes.LOOP);
+      this.currentRoll = Roll.STROLL;
+      this.refreshDimensions();
+      this.ticksTillRemove = Utils.secondsToTicks((Integer)ServerConfig.TIME_UNTIL_LEAVE.get());
+      this.setPathfindingMalus(BlockPathTypes.UNPASSABLE_RAIL, 0.0F);
+   }
 
-        setAttribute(getAttribute(Attributes.MAX_HEALTH), ServerConfig.MAX_HEALTH.get());
-        setAttribute(getAttribute(Attributes.ATTACK_DAMAGE), ServerConfig.ATTACK_DAMAGE.get());
-        setAttribute(getAttribute(Attributes.ATTACK_SPEED), ServerConfig.ATTACK_SPEED.get());
-        setAttribute(getAttribute(Attributes.MOVEMENT_SPEED), ServerConfig.MOVEMENT_SPEED.get());
-        setAttribute(getAttribute(ForgeMod.STEP_HEIGHT_ADDITION.get()), 0.4); // LivingEntity default is 0.6
-    }
+   @Nullable
+   public SpawnGroupData finalizeSpawn(@NotNull ServerLevelAccessor level, @NotNull DifficultyInstance difficulty, @NotNull MobSpawnType reason, @Nullable SpawnGroupData spawnData, @Nullable CompoundTag tagData) {
+      this.setAttribute(this.getAttribute(Attributes.MAX_HEALTH), (Double)ServerConfig.MAX_HEALTH.get());
+      this.setAttribute(this.getAttribute(Attributes.ATTACK_DAMAGE), (Double)ServerConfig.ATTACK_DAMAGE.get());
+      this.setAttribute(this.getAttribute(Attributes.ATTACK_SPEED), (Double)ServerConfig.ATTACK_SPEED.get());
+      this.setAttribute(this.getAttribute(Attributes.MOVEMENT_SPEED), (Double)ServerConfig.MOVEMENT_SPEED.get());
+      this.setAttribute(this.getAttribute((Attribute)ForgeMod.STEP_HEIGHT_ADDITION.get()), 0.4D);
+      return super.finalizeSpawn(level, difficulty, reason, spawnData, tagData);
+   }
 
-    private void setAttribute(final AttributeInstance attribute, double newValue) {
-        if (attribute != null) {
-            double baseValue = attribute.getBaseValue();
-            float difference = (float) (newValue - baseValue);
-            attribute.setBaseValue(newValue);
+   private void setAttribute(AttributeInstance attribute, double value) {
+      if (attribute != null) {
+         attribute.setBaseValue(value);
+         if (attribute.getAttribute() == Attributes.MAX_HEALTH) {
+            this.setHealth((float)value);
+         } else if (attribute.getAttribute() == Attributes.MOVEMENT_SPEED) {
+            this.setSpeed((float)value);
+         }
+      }
 
-            if (attribute.getAttribute() == Attributes.MAX_HEALTH) {
-                setHealth(getHealth() + difference);
-            } else if (attribute.getAttribute() == Attributes.MOVEMENT_SPEED) {
-                setSpeed(getSpeed() + difference);
-            }
-        }
-    }
+   }
 
-    public static AttributeSupplier getAttributeBuilder() {
-        double maxHealth = 60.0;
-        double attackDamage = 6.0;
-        double attackSpeed = 0.35;
-        double movementSpeed = 0.3;
-        double followRange = 100.0;
+   public static AttributeSupplier getAttributeBuilder() {
+      double maxHealth = 60.0D;
+      double attackDamage = 6.0D;
+      double attackSpeed = 0.35D;
+      double movementSpeed = 0.3D;
+      double followRange = 100.0D;
+      return createMobAttributes().add(Attributes.MAX_HEALTH, maxHealth).add(Attributes.ATTACK_DAMAGE, attackDamage).add(Attributes.ATTACK_SPEED, attackSpeed).add(Attributes.MOVEMENT_SPEED, movementSpeed).add(Attributes.FOLLOW_RANGE, followRange).build();
+   }
 
-        return CaveDwellerEntity.createMobAttributes()
-                .add(Attributes.MAX_HEALTH, maxHealth)
-                .add(Attributes.ATTACK_DAMAGE, attackDamage)
-                .add(Attributes.ATTACK_SPEED, attackSpeed)
-                .add(Attributes.MOVEMENT_SPEED, movementSpeed)
-                .add(Attributes.FOLLOW_RANGE, followRange)
-                .build();
-    }
+   protected void defineSynchedData() {
+      super.defineSynchedData();
+      this.entityData.define(FLEEING_ACCESSOR, false);
+      this.entityData.define(CROUCHING_ACCESSOR, false);
+      this.entityData.define(CRAWLING_ACCESSOR, false);
+      this.entityData.define(SPOTTED_ACCESSOR, false);
+      this.entityData.define(CLIMBING_ACCESSOR, false);
+   }
 
-    @Override
-    protected void defineSynchedData() {
-        super.defineSynchedData();
-        entityData.define(FLEEING_ACCESSOR, false);
-        entityData.define(CROUCHING_ACCESSOR, false);
-        entityData.define(CRAWLING_ACCESSOR, false);
-        entityData.define(SPOTTED_ACCESSOR, false);
-        entityData.define(CLIMBING_ACCESSOR, false);
-    }
+   protected void registerGoals() {
+      this.goalSelector.addGoal(1, new de.cadentem.cave_dweller.entities.goals.CaveDwellerChaseGoal(this, true));
+      this.goalSelector.addGoal(1, new de.cadentem.cave_dweller.entities.goals.CaveDwellerFleeGoal(this, 20.0F, 1.0D));
+      this.goalSelector.addGoal(2, new de.cadentem.cave_dweller.entities.goals.CaveDwellerBreakInvisGoal(this));
+      this.goalSelector.addGoal(2, new de.cadentem.cave_dweller.entities.goals.CaveDwellerStareGoal(this));
+      if ((Boolean)ServerConfig.CAN_BREAK_DOOR.get()) {
+         this.goalSelector.addGoal(2, new de.cadentem.cave_dweller.entities.goals.CaveDwellerBreakDoorGoal(this, (difficulty) -> {
+            return true;
+         }));
+      }
 
-    @Override
-    protected void registerGoals() {
-        goalSelector.addGoal(1, new CaveDwellerChaseGoal(this, true));
-        goalSelector.addGoal(1, new CaveDwellerFleeGoal(this, 20, 1));
-        goalSelector.addGoal(2, new CaveDwellerBreakInvisGoal(this));
-        goalSelector.addGoal(2, new CaveDwellerStareGoal(this));
-        if (ServerConfig.CAN_BREAK_DOOR.get()) { // TODO :: Remove for already spawned entities on config change?
-            goalSelector.addGoal(2, new CaveDwellerBreakDoorGoal(this, difficulty -> true));
-        }
-        goalSelector.addGoal(3, new CaveDwellerStrollGoal(this, 0.35));
-        targetSelector.addGoal(0, new CustomHurtByTargetGoal(this));
-        targetSelector.addGoal(1, new CaveDwellerTargetTooCloseGoal(this, 12));
-        targetSelector.addGoal(2, new CaveDwellerTargetSeesMeGoal(this));
-    }
+      this.goalSelector.addGoal(3, new de.cadentem.cave_dweller.entities.goals.CaveDwellerStrollGoal(this, 0.35D));
+      this.targetSelector.addGoal(1, new de.cadentem.cave_dweller.entities.goals.CaveDwellerTargetTooCloseGoal(this, 12.0F));
+      this.targetSelector.addGoal(2, new de.cadentem.cave_dweller.entities.goals.CaveDwellerTargetSeesMeGoal(this));
+   }
 
-    public void disappear() {
-        playDisappearSound();
-        discard();
-    }
+   public void disappear() {
+      this.playDisappearSound();
+      this.discard();
+   }
 
-    public boolean hasSpawned() {
-        return hasSpawned;
-    }
+   public boolean hasSpawned() {
+      return this.hasSpawned;
+   }
 
-    @Override
-    protected boolean canRide(@NotNull final Entity vehicle) {
-        if (ServerConfig.ALLOW_RIDING.get()) {
-            return super.canRide(vehicle);
-        }
+   protected boolean canRide(@NotNull Entity vehicle) {
+      return (Boolean)ServerConfig.ALLOW_RIDING.get() ? super.canRide(vehicle) : false;
+   }
 
-        return false;
-    }
+   public boolean startRiding(@NotNull Entity vehicle, boolean force) {
+      return (Boolean)ServerConfig.ALLOW_RIDING.get() ? super.startRiding(vehicle, force) : false;
+   }
 
-    @Override
-    public boolean startRiding(@NotNull final Entity vehicle, boolean force) {
-        if (ServerConfig.ALLOW_RIDING.get()) {
-            return super.startRiding(vehicle, force);
-        }
+   public void tick() {
+      --this.ticksTillRemove;
+      if (this.ticksTillRemove <= 0) {
+         this.disappear();
+      }
 
-        return false;
-    }
+      if (this.goalSelector.getAvailableGoals().isEmpty() || this.targetSelector.getAvailableGoals().isEmpty()) {
+         this.registerGoals();
+         this.goalSelector.tick();
+         this.targetSelector.tick();
+      }
 
-    @Override
-    public boolean canDisableShield() {
-        return ServerConfig.CAN_DISABLE_SHIELDS.get();
-    }
+      if (this.getTarget() != null) {
+         this.targetIsFacingMe = this.isLookingAtMe(this.getTarget(), false);
+      }
 
-    @Override
-    public void tick() {
-        --ticksTillRemove;
+      if (this.level instanceof ServerLevel) {
+         boolean isAboveSolid = this.level.getBlockState(this.blockPosition().above()).getMaterial().isSolid();
+         boolean isTwoAboveSolid = this.level.getBlockState(this.blockPosition().above(2)).getMaterial().isSolid();
+         boolean isThreeAboveSolid = this.level.getBlockState(this.blockPosition().above(3)).getMaterial().isSolid();
+         Vec3i offset = this.getDirectionVector();
+         boolean isFacingSolid = this.level.getBlockState(this.blockPosition().relative(this.getDirection())).getMaterial().isSolid();
+         if (isFacingSolid) {
+            offset = offset.offset(0, 1, 0);
+         }
 
-        if (ticksTillRemove <= 0) {
-            disappear();
-        }
+         boolean isOffsetFacingSolid = this.level.getBlockState(this.blockPosition().offset(offset)).getMaterial().isSolid();
+         boolean isOffsetFacingAboveSolid = this.level.getBlockState(this.blockPosition().offset(offset).above()).getMaterial().isSolid();
+         boolean isOffsetFacingTwoAboveSolid = this.level.getBlockState(this.blockPosition().offset(offset).above(2)).getMaterial().isSolid();
+         boolean shouldCrouch = isTwoAboveSolid || !isOffsetFacingSolid && !isOffsetFacingAboveSolid && (isOffsetFacingTwoAboveSolid || isFacingSolid && isThreeAboveSolid);
+         boolean shouldCrawl = isAboveSolid || !isOffsetFacingSolid && isOffsetFacingAboveSolid || isFacingSolid && isTwoAboveSolid;
+         if (this.isAggressive() || this.isFleeing) {
+            this.entityData.set(SPOTTED_ACCESSOR, false);
+         }
 
-        if (goalSelector.getAvailableGoals().isEmpty() || targetSelector.getAvailableGoals().isEmpty()) {
-            registerGoals();
-            goalSelector.tick();
-            targetSelector.tick();
-        }
+         this.setClimbing(this.horizontalCollision);
+         this.entityData.set(CROUCHING_ACCESSOR, shouldCrouch);
+         this.setCrawling(shouldCrawl);
+      }
 
-        if (getTarget() != null) {
-            targetIsFacingMe = isLookingAtMe(getTarget(), false);
-        }
+      if ((Boolean)this.entityData.get(SPOTTED_ACCESSOR)) {
+         this.playSpottedSound();
+      }
 
-        if (level instanceof ServerLevel) {
-            // TODO :: Check crawl first and then the additional block states (two / three above) for crouch if needed
+      this.refreshDimensions();
+      this.getNavigation().setSpeedModifier(this.getSpeedModifier());
+      super.tick();
+   }
 
-            boolean isAboveSolid = level.getBlockState(blockPosition().above()).getMaterial().isSolid();
-            boolean isTwoAboveSolid = level.getBlockState(blockPosition().above(2)).getMaterial().isSolid();
-            boolean isThreeAboveSolid = level.getBlockState(blockPosition().above(3)).getMaterial().isSolid();
+   public double getSpeedModifier() {
+      return this.isCrawling() ? 0.35D : (this.isCrouching() ? 0.6D : 0.85D);
+   }
 
-            Vec3i offset = getDirectionVector();
-            boolean isFacingSolid = level.getBlockState(blockPosition().relative(getDirection())).getMaterial().isSolid();
+   @NotNull
+   public EntityDimensions getDimensions(@NotNull Pose pose) {
+      if ((Boolean)this.entityData.get(CRAWLING_ACCESSOR)) {
+         return new EntityDimensions(0.5F, 0.5F, true);
+      } else {
+         return (Boolean)this.entityData.get(CROUCHING_ACCESSOR) ? new EntityDimensions(0.5F, 1.7F, true) : super.getDimensions(pose);
+      }
+   }
 
-            /* Offset is set to the block above the block position (which is at feet level) (since direction is used it's the block in front for both cases)
-                -----o                  -----o
-                     o                       o <- offset
-                -----o <- current       -----o
-            */
-            if (isFacingSolid) { // TODO :: Clean up, the offset with the check is kinda useless at this point since both positions are needed for correct checks
-                offset = offset.offset(0, 1, 0);
-            }
+   private boolean isMoving() {
+      Vec3 velocity = this.getDeltaMovement();
+      float avgVelocity = (float)(Math.abs(velocity.x) + Math.abs(velocity.z)) / 2.0F;
+      return avgVelocity > 0.03F;
+   }
 
-            boolean isOffsetFacingSolid = level.getBlockState(blockPosition().offset(offset)).getMaterial().isSolid();
-            boolean isOffsetFacingAboveSolid = level.getBlockState(blockPosition().offset(offset).above()).getMaterial().isSolid();
-            boolean isOffsetFacingTwoAboveSolid = level.getBlockState(blockPosition().offset(offset).above(2)).getMaterial().isSolid();
+   public void reRoll() {
+      this.currentRoll = Roll.fromValue((new Random()).nextInt(3));
+   }
 
-            /* [- : blocks | o : cave dweller | + : cave dweller in solid block]
-                To handle these variants among other things:
-               ----+        ----o       -----
-                   o            o           o
-                   o            o           o
-               -----        -----       ----o
-            */
-            boolean shouldCrouch = isTwoAboveSolid || (!isOffsetFacingSolid && !isOffsetFacingAboveSolid && (isOffsetFacingTwoAboveSolid || isFacingSolid && isThreeAboveSolid)) ;
+   public void pickRoll(@NotNull List<Roll> rolls) {
+      this.currentRoll = (Roll)rolls.get((new Random()).nextInt(rolls.size()));
+   }
 
-            /* [- : blocks | o : cave dweller | + : cave dweller in solid block]
-                To handle these variants among other things:
-                    o           o
-                ----+       ----o       ----+
-                    o           o           o
-                -----       -----       ----o
-            */
-            boolean shouldCrawl = isAboveSolid || !isOffsetFacingSolid && isOffsetFacingAboveSolid || isFacingSolid && isTwoAboveSolid;
+   public boolean onClimbable() {
+      return this.isClimbing();
+   }
 
-            if (isAggressive() || isFleeing) {
-                entityData.set(SPOTTED_ACCESSOR, false);
-            }
+   public boolean isClimbing() {
+      if (!(Boolean)ServerConfig.CAN_CLIMB.get()) {
+         return false;
+      } else if (this.getTarget() == null) {
+         return false;
+      } else {
+         return !this.isCrawling() && !this.isCrouching() && (Boolean)this.entityData.get(CLIMBING_ACCESSOR);
+      }
+   }
 
-            setClimbing(horizontalCollision);
-            entityData.set(CROUCHING_ACCESSOR, shouldCrouch);
-            setCrawling(shouldCrawl);
-        }
+   public void setClimbing(boolean isClimbing) {
+      this.entityData.set(CLIMBING_ACCESSOR, isClimbing);
+   }
 
-        if (entityData.get(SPOTTED_ACCESSOR)) {
-            playSpottedSound();
-        }
+   @NotNull
+   protected PathNavigation createNavigation(@NotNull Level level) {
+      WallClimberNavigation navigation = new WallClimberNavigation(this, level);
+      navigation.setMaxVisitedNodesMultiplier(4.0F);
+      return navigation;
+   }
 
-        refreshDimensions(); // TODO :: Currently needed to make client stay in sync
-        getNavigation().setSpeedModifier(getSpeedModifier());
-
-        super.tick();
-    }
-
-    public double getSpeedModifier() {
-        return isCrawling() ? 0.35 : isCrouching() ? 0.6 : 0.85;
-    }
-
-    @Override
-    public @NotNull EntityDimensions getDimensions(@NotNull final Pose pose) {
-        if (entityData.get(CRAWLING_ACCESSOR)) { // TODO :: Allow config (for crawling through half-block space)?
-            return new EntityDimensions(0.5F, 0.5F, true);
-        } else if (entityData.get(CROUCHING_ACCESSOR)) {
-            return new EntityDimensions(0.5F, 1.7F, true);
-        }
-
-        return super.getDimensions(pose);
-    }
-
-    private boolean isMoving() {
-        Vec3 velocity = getDeltaMovement();
-        float avgVelocity = (float) (Math.abs(velocity.x) + Math.abs(velocity.z)) / 2.0F;
-
-        return avgVelocity > 0.03F;
-    }
-
-    public void reRoll() {
-        /*
-        Rolling STROLL (3) here causes it to just stand in place and play the stare animation
-        (And playing the stare animation when it stops moving)
-        */
-        currentRoll = Roll.fromValue(new Random().nextInt(3));
-    }
-
-    public void pickRoll(@NotNull final List<Roll> rolls) {
-        currentRoll = rolls.get(new Random().nextInt(rolls.size()));
-    }
-
-    @Override
-    public boolean onClimbable() {
-        return isClimbing();
-    }
-
-    public boolean isClimbing() {
-        if (!ServerConfig.CAN_CLIMB.get()) {
-            return false;
-        }
-
-        if (getTarget() != null) {
-            // TODO :: Not sure if the initial two checks are needed
-            return !isCrawling() && !isCrouching() && entityData.get(CLIMBING_ACCESSOR);
-        }
-
-        return false;
-    }
-
-    public void setSpotted(boolean value) {
-        entityData.set(SPOTTED_ACCESSOR, value);
-    }
-
-    public void setClimbing(boolean isClimbing) {
-        entityData.set(CLIMBING_ACCESSOR, isClimbing);
-    }
-
-    @Override
-    protected @NotNull PathNavigation createNavigation(@NotNull final Level level) {
-        WallClimberNavigation navigation = new WallClimberNavigation(this, level);
-        navigation.setMaxVisitedNodesMultiplier(4);
-        return navigation;
-    }
-
-    private PlayState predicate(final AnimationEvent<CaveDwellerEntity> event) {
-        AnimationBuilder builder = new AnimationBuilder();
-        AnimationController<CaveDwellerEntity> controller = event.getController();
-
-        boolean isCurrentAboveSolid = level.getBlockState(blockPosition().above()).getMaterial().isSolid();
-        boolean unsure = isCrawling() && level.getBlockState(blockPosition()).getMaterial().isSolid();
-//        boolean isFacingAboveSolid = isCrawling() && level.getBlockState(blockPosition().offset(getDirectionVector()).above()).getMaterial().isSolid();
-        boolean isCurrentTwoAboveSolid = level.getBlockState(blockPosition().above(2)).getMaterial().isSolid();
-//        boolean isFacingTwoAboveSolid = isCrouching() && level.getBlockState(blockPosition().offset(getDirectionVector()).above(2)).getMaterial().isSolid();;
-
-        // TODO :: Climbing animation
-        if (isCurrentAboveSolid || unsure /*|| isFacingAboveSolid*/) {
-            // Crawling
-            builder.addAnimation(CRAWL.animationName, CRAWL.loopType);
-        } else if (isCurrentTwoAboveSolid /*|| isFacingTwoAboveSolid*/) {
-            // Crouching
+   private PlayState predicate(AnimationEvent<CaveDwellerEntity> event) {
+      AnimationBuilder builder = new AnimationBuilder();
+      AnimationController<CaveDwellerEntity> controller = event.getController();
+      boolean isCurrentAboveSolid = this.level.getBlockState(this.blockPosition().above()).getMaterial().isSolid();
+      boolean unsure = this.isCrawling() && this.level.getBlockState(this.blockPosition()).getMaterial().isSolid();
+      boolean isCurrentTwoAboveSolid = this.level.getBlockState(this.blockPosition().above(2)).getMaterial().isSolid();
+      if (!isCurrentAboveSolid && !unsure) {
+         if (isCurrentTwoAboveSolid) {
             if (event.isMoving()) {
-                builder.addAnimation(CROUCH_RUN.animationName, CROUCH_RUN.loopType);
+               builder.addAnimation(this.CROUCH_RUN.animationName, this.CROUCH_RUN.loopType);
             } else {
-                builder.addAnimation(CROUCH_IDLE.animationName, CROUCH_IDLE.loopType);
+               builder.addAnimation(this.CROUCH_IDLE.animationName, this.CROUCH_IDLE.loopType);
             }
-        } else if (isAggressive()) {
-            // Chase
+         } else if (this.isAggressive()) {
             if (event.isMoving()) {
-                builder.addAnimation(CHASE.animationName, CHASE.loopType);
+               builder.addAnimation(this.CHASE.animationName, this.CHASE.loopType);
             } else {
-                builder.addAnimation(CHASE_IDLE.animationName, CHASE_IDLE.loopType);
+               builder.addAnimation(this.CHASE_IDLE.animationName, this.CHASE_IDLE.loopType);
             }
-        } else if (entityData.get(FLEEING_ACCESSOR)) {
-            // Fleeing
+         } else if ((Boolean)this.entityData.get(FLEEING_ACCESSOR)) {
             if (event.isMoving()) {
-                builder.addAnimation(FLEE.animationName, FLEE.loopType);
+               builder.addAnimation(this.FLEE.animationName, this.FLEE.loopType);
             } else {
-                builder.addAnimation(CHASE_IDLE.animationName, CHASE_IDLE.loopType);
+               builder.addAnimation(this.CHASE_IDLE.animationName, this.CHASE_IDLE.loopType);
             }
-        } else if (pleaseStopMoving || entityData.get(SPOTTED_ACCESSOR) && !event.isMoving()) {
-            // Spotted
-            builder.addAnimation(IS_SPOTTED.animationName, IS_SPOTTED.loopType);
-        } else {
-            // Normal
+         } else if (!this.pleaseStopMoving && (!(Boolean)this.entityData.get(SPOTTED_ACCESSOR) || event.isMoving())) {
             if (event.isMoving()) {
-                builder.addAnimation(CALM_RUN.animationName, CALM_RUN.loopType);
+               builder.addAnimation(this.CALM_RUN.animationName, this.CALM_RUN.loopType);
             } else {
-                builder.addAnimation(CALM_STILL.animationName, CALM_STILL.loopType);
+               builder.addAnimation(this.CALM_STILL.animationName, this.CALM_STILL.loopType);
             }
-        }
+         } else {
+            builder.addAnimation(this.IS_SPOTTED.animationName, this.IS_SPOTTED.loopType);
+         }
+      } else {
+         builder.addAnimation(this.CRAWL.animationName, this.CRAWL.loopType);
+      }
 
-        controller.setAnimation(builder);
-        return PlayState.CONTINUE;
-    }
+      controller.setAnimation(builder);
+      return PlayState.CONTINUE;
+   }
 
-    @Override
-    public void registerControllers(final AnimationData data) {
-        data.addAnimationController(new AnimationController<>(this, "controller", 3, this::predicate));
-    }
+   public void registerControllers(AnimationData data) {
+      data.addAnimationController(new AnimationController(this, "controller", 3.0F, this::predicate));
+   }
 
-    @Override
-    public AnimationFactory getFactory() {
-        return factory;
-    }
+   public AnimationFactory getFactory() {
+      return this.factory;
+   }
 
-    @Override
-    protected void playStepSound(@NotNull BlockPos pPos, @NotNull BlockState pState) {
-        super.playStepSound(pPos, pState);
-        playEntitySound(chooseStep());
-    }
+   protected void playStepSound(@NotNull BlockPos pPos, @NotNull BlockState pState) {
+      super.playStepSound(pPos, pState);
+      this.playEntitySound(this.chooseStep());
+   }
 
-    private void playEntitySound(SoundEvent soundEvent) {
-        playEntitySound(soundEvent, 1.0F, 1.0F);
-    }
+   private void playEntitySound(SoundEvent soundEvent) {
+      this.playEntitySound(soundEvent, 1.0F, 1.0F);
+   }
 
-    private void playEntitySound(SoundEvent soundEvent, float volume, float pitch) {
-        level.playSound(null, this, soundEvent, SoundSource.HOSTILE, volume, pitch);
-    }
+   private void playEntitySound(SoundEvent soundEvent, float volume, float pitch) {
+      this.level.playSound((Player)null, this, soundEvent, SoundSource.HOSTILE, volume, pitch);
+   }
 
-    private void playBlockPosSound(final ResourceLocation soundResource, float volume, float pitch) {
-        if (level instanceof ServerLevel serverLevel) {
-            int radius = 32; // blocks
-            serverLevel.getPlayers(player -> player.distanceToSqr(this) <= radius * radius).forEach(player -> NetworkHandler.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new CaveSound(soundResource, blockPosition(), volume, pitch)));
-        }
-    }
+   private void playBlockPosSound(ResourceLocation soundResource, float volume, float pitch) {
+      Level var5 = this.level;
+      if (var5 instanceof ServerLevel) {
+         ServerLevel serverLevel = (ServerLevel)var5;
+         int radius = 60;
+         serverLevel.getPlayers((player) -> {
+            return player.distanceToSqr(this) <= (double)(radius * radius);
+         }).forEach((player) -> {
+            NetworkHandler.CHANNEL.send(PacketDistributor.PLAYER.with(() -> {
+               return player;
+            }), new CaveSound(soundResource, player.blockPosition(), volume, pitch));
+         });
+      }
 
-    public void playChaseSound() {
-        if (startedPlayingChaseSound || isMoving()) {
-            if (chaseSoundClock <= 0) {
-                Random rand = new Random();
+   }
 
-                switch (rand.nextInt(4)) {
-                    case 0 -> playEntitySound(ModSounds.CHASE_1.get(), 3.0F, 1.0F);
-                    case 1 -> playEntitySound(ModSounds.CHASE_2.get(), 3.0F, 1.0F);
-                    case 2 -> playEntitySound(ModSounds.CHASE_3.get(), 3.0F, 1.0F);
-                    case 3 -> playEntitySound(ModSounds.CHASE_4.get(), 3.0F, 1.0F);
-                }
-
-                startedPlayingChaseSound = true;
-                resetChaseSoundClock();
-            }
-
-            --chaseSoundClock;
-        }
-    }
-
-    public void playDisappearSound() {
-        playBlockPosSound(ModSounds.DISAPPEAR.get().getLocation(), 3.0F, 1.0F);
-    }
-
-    public void playFleeSound() {
-        if (!alreadyPlayedFleeSound) {
+   public void playChaseSound() {
+      if (this.startedPlayingChaseSound || this.isMoving()) {
+         if (this.chaseSoundClock <= 0) {
             Random rand = new Random();
-
-            switch (rand.nextInt(2)) {
-                case 0 -> playEntitySound(ModSounds.FLEE_1.get(), 3.0F, 1.0F);
-                case 1 -> playEntitySound(ModSounds.FLEE_2.get(), 3.0F, 1.0F);
+            switch(rand.nextInt(4)) {
+            case 0:
+               this.playEntitySound((SoundEvent)ModSounds.CHASE_1.get(), 3.0F, 1.0F);
+               break;
+            case 1:
+               this.playEntitySound((SoundEvent)ModSounds.CHASE_2.get(), 3.0F, 1.0F);
+               break;
+            case 2:
+               this.playEntitySound((SoundEvent)ModSounds.CHASE_3.get(), 3.0F, 1.0F);
+               break;
+            case 3:
+               this.playEntitySound((SoundEvent)ModSounds.CHASE_4.get(), 3.0F, 1.0F);
             }
 
-            alreadyPlayedFleeSound = true;
-        }
-    }
+            this.startedPlayingChaseSound = true;
+            this.resetChaseSoundClock();
+         }
 
-    private void playSpottedSound() {
-        if (!alreadyPlayedSpottedSound) {
-            playEntitySound(ModSounds.SPOTTED.get(), 3.0F, 1.0F);
-            alreadyPlayedSpottedSound = true;
-        }
-    }
+         --this.chaseSoundClock;
+      }
 
-    private void resetChaseSoundClock() {
-        chaseSoundClock = Utils.secondsToTicks(5);
-    }
+   }
 
-    private SoundEvent chooseStep() {
-        Random rand = new Random();
+   public void playDisappearSound() {
+      this.playBlockPosSound(((SoundEvent)ModSounds.DISAPPEAR.get()).getLocation(), 3.0F, 1.0F);
+   }
 
-        return switch (rand.nextInt(4)) {
-            case 1 -> ModSounds.CHASE_STEP_2.get();
-            case 2 -> ModSounds.CHASE_STEP_3.get();
-            case 3 -> ModSounds.CHASE_STEP_4.get();
-            default -> ModSounds.CHASE_STEP_1.get();
-        };
-    }
+   public void playFleeSound() {
+      if (!this.alreadyPlayedFleeSound) {
+         Random rand = new Random();
+         switch(rand.nextInt(2)) {
+         case 0:
+            this.playEntitySound((SoundEvent)ModSounds.FLEE_1.get(), 3.0F, 1.0F);
+            break;
+         case 1:
+            this.playEntitySound((SoundEvent)ModSounds.FLEE_2.get(), 3.0F, 1.0F);
+         }
 
-    private SoundEvent chooseHurtSound() {
-        Random rand = new Random();
+         this.alreadyPlayedFleeSound = true;
+      }
 
-        return switch (rand.nextInt(4)) {
-            case 1 -> ModSounds.DWELLER_HURT_2.get();
-            case 2 -> ModSounds.DWELLER_HURT_3.get();
-            case 3 -> ModSounds.DWELLER_HURT_4.get();
-            default -> ModSounds.DWELLER_HURT_1.get();
-        };
-    }
+   }
 
-    @Override
-    protected void playHurtSound(@NotNull final DamageSource pSource) {
-        SoundEvent soundevent = chooseHurtSound();
-        playEntitySound(soundevent, 2.0F, 1.0F);
-    }
+   private void playSpottedSound() {
+      if (!this.alreadyPlayedSpottedSound) {
+         this.playEntitySound((SoundEvent)ModSounds.SPOTTED.get(), 3.0F, 1.0F);
+         this.alreadyPlayedSpottedSound = true;
+      }
 
-    public void setCrawling(boolean shouldCrawl) {
-        if (shouldCrawl) {
-            getEntityData().set(CROUCHING_ACCESSOR, false);
-        }
+   }
 
-        getEntityData().set(CRAWLING_ACCESSOR, shouldCrawl);
-        refreshDimensions();
-    }
+   private void resetChaseSoundClock() {
+      this.chaseSoundClock = Utils.secondsToTicks(5);
+   }
 
-    public boolean isCrawling() {
-        return entityData.get(CRAWLING_ACCESSOR);
-    }
+   private SoundEvent chooseStep() {
+      Random rand = new Random();
+      SoundEvent var10000;
+      switch(rand.nextInt(4)) {
+      case 1:
+         var10000 = (SoundEvent)ModSounds.CHASE_STEP_2.get();
+         break;
+      case 2:
+         var10000 = (SoundEvent)ModSounds.CHASE_STEP_3.get();
+         break;
+      case 3:
+         var10000 = (SoundEvent)ModSounds.CHASE_STEP_4.get();
+         break;
+      default:
+         var10000 = (SoundEvent)ModSounds.CHASE_STEP_1.get();
+      }
 
+      return var10000;
+   }
 
-    /* TODO :: Check
-    @Override
-    public boolean isVisuallyCrawling() {
-        return super.isVisuallyCrawling();
-    }
-    */
+   private SoundEvent chooseHurtSound() {
+      Random rand = new Random();
+      SoundEvent var10000;
+      switch(rand.nextInt(4)) {
+      case 1:
+         var10000 = (SoundEvent)ModSounds.DWELLER_HURT_2.get();
+         break;
+      case 2:
+         var10000 = (SoundEvent)ModSounds.DWELLER_HURT_3.get();
+         break;
+      case 3:
+         var10000 = (SoundEvent)ModSounds.DWELLER_HURT_4.get();
+         break;
+      default:
+         var10000 = (SoundEvent)ModSounds.DWELLER_HURT_1.get();
+      }
 
-    @Override
-    protected void tickDeath() {
-        super.tickDeath();
+      return var10000;
+   }
 
-        if (!alreadyPlayedDeathSound) {
-            playBlockPosSound(ModSounds.DWELLER_DEATH.get().getLocation(), 2.0F, 1.0F);
-            alreadyPlayedDeathSound = true;
-        }
-    }
+   protected void playHurtSound(@NotNull DamageSource pSource) {
+      SoundEvent soundevent = this.chooseHurtSound();
+      this.playEntitySound(soundevent, 2.0F, 1.0F);
+   }
 
-    public boolean isLookingAtMe(final Entity target, boolean directlyLooking) {
-        if (!Utils.isValidTarget(target)) {
-            return false;
-        }
+   public void setCrawling(boolean shouldCrawl) {
+      if (shouldCrawl) {
+         this.getEntityData().set(CROUCHING_ACCESSOR, false);
+      }
 
-        if (target.getEyePosition(1).distanceTo(getPosition(1)) > ServerConfig.SPOTTING_RANGE.get()) {
-            return false;
-        }
+      this.getEntityData().set(CRAWLING_ACCESSOR, shouldCrawl);
+      this.refreshDimensions();
+   }
 
-        Vec3 viewVector = target.getViewVector(1.0F).normalize();
-        Vec3 difference = new Vec3(getX() - target.getX(), getEyeY() - target.getEyeY(), getZ() - target.getZ());
-        difference = difference.normalize();
-        double dot = viewVector.dot(difference);
+   public boolean isCrawling() {
+      return (Boolean)this.entityData.get(CRAWLING_ACCESSOR);
+   }
 
-        if (directlyLooking && target instanceof Player player) {
-            return dot > 0.99 && player.hasLineOfSight(this);
-        }
+   protected void tickDeath() {
+      super.tickDeath();
+      if (!this.alreadyPlayedDeathSound) {
+         this.playBlockPosSound(((SoundEvent)ModSounds.DWELLER_DEATH.get()).getLocation(), 2.0F, 1.0F);
+         this.alreadyPlayedDeathSound = true;
+      }
 
-        return dot > 0.3;
-    }
+   }
 
-    public boolean teleportToTarget() {
-        LivingEntity target = getTarget();
+   public boolean isLookingAtMe(Entity target, boolean directlyLooking) {
+      if (!Utils.isValidPlayer(target)) {
+         return false;
+      } else if (target.getEyePosition(1.0F).distanceTo(this.getPosition(1.0F)) > (double)(Integer)ServerConfig.SPOTTING_RANGE.get()) {
+         return false;
+      } else {
+         Vec3 viewVector = target.getViewVector(1.0F).normalize();
+         Vec3 difference = new Vec3(this.getX() - target.getX(), this.getEyeY() - target.getEyeY(), this.getZ() - target.getZ());
+         difference = difference.normalize();
+         double dot = viewVector.dot(difference);
+         if (directlyLooking && target instanceof Player) {
+            Player player = (Player)target;
+            return dot > 0.99D && player.hasLineOfSight(this);
+         } else {
+            return dot > 0.3D;
+         }
+      }
+   }
 
-        if (target == null) {
-            return false;
-        }
+   public boolean teleportToTarget() {
+      LivingEntity target = this.getTarget();
+      if (target == null) {
+         return false;
+      } else {
+         Vec3 targetPosition = new Vec3(this.getX() - target.getX(), this.getY(0.5D) - target.getEyeY(), this.getZ() - target.getZ());
+         targetPosition = targetPosition.normalize();
+         double radius = 16.0D;
+         double d1 = this.getX() + (this.getRandom().nextDouble() - 0.5D) * (radius / 2.0D) - targetPosition.x * radius;
+         double d2 = this.getY() + ((double)this.getRandom().nextInt((int)radius) - radius / 2.0D) - targetPosition.y * radius;
+         double d3 = this.getZ() + (this.getRandom().nextDouble() - 0.5D) * (radius / 2.0D) - targetPosition.z * radius;
+         MutableBlockPos validPosition = new MutableBlockPos(d1, d2, d3);
 
-        Vec3 targetPosition = new Vec3(getX() - target.getX(), getY(0.5D) - target.getEyeY(), getZ() - target.getZ());
-        targetPosition = targetPosition.normalize();
-
-        double radius = 16;
-
-        double d1 = getX() + (getRandom().nextDouble() - 0.5D) * (radius / 2) - targetPosition.x * radius;
-        double d2 = getY() + (getRandom().nextInt((int) radius) - (radius / 2)) - targetPosition.y * radius;
-        double d3 = getZ() + (getRandom().nextDouble() - 0.5D) * (radius / 2) - targetPosition.z * radius;
-
-        BlockPos.MutableBlockPos validPosition = new BlockPos.MutableBlockPos(d1, d2, d3);
-
-        // Don't teleport up into the air
-        while (validPosition.getY() > level.getMinBuildHeight() && !level.getBlockState(validPosition).getMaterial().blocksMotion()) {
+         while(validPosition.getY() > this.level.getMinBuildHeight() && !this.level.getBlockState(validPosition).getMaterial().blocksMotion()) {
             validPosition.move(Direction.DOWN);
-        }
+         }
 
-        teleportTo(validPosition.getX(), validPosition.getY(), validPosition.getZ());
+         this.teleportTo((double)validPosition.getX(), (double)validPosition.getY(), (double)validPosition.getZ());
+         return true;
+      }
+   }
 
-        return true;
-    }
+   private Vec3i getDirectionVector() {
+      return new Vec3i(this.getDirection().getStepX(), this.getDirection().getStepY(), this.getDirection().getStepZ());
+   }
 
-    private Vec3i getDirectionVector() {
-        return new Vec3i(getDirection().getStepX(), getDirection().getStepY(), getDirection().getStepZ());
-    }
+   protected SoundEvent getHurtSound(@NotNull DamageSource damageSourceIn) {
+      return this.chooseHurtSound();
+   }
 
-    @Override
-    protected SoundEvent getHurtSound(@NotNull final DamageSource damageSourceIn) {
-        return chooseHurtSound();
-    }
+   protected SoundEvent getDeathSound() {
+      return (SoundEvent)ModSounds.DWELLER_DEATH.get();
+   }
 
-    @Override
-    protected SoundEvent getDeathSound() {
-        return ModSounds.DWELLER_DEATH.get();
-    }
+   protected float getSoundVolume() {
+      return 0.4F;
+   }
 
-    @Override
-    protected float getSoundVolume() {
-        return 0.4F;
-    }
+   static {
+      FLEEING_ACCESSOR = SynchedEntityData.defineId(CaveDwellerEntity.class, EntityDataSerializers.BOOLEAN);
+      CROUCHING_ACCESSOR = SynchedEntityData.defineId(CaveDwellerEntity.class, EntityDataSerializers.BOOLEAN);
+      CRAWLING_ACCESSOR = SynchedEntityData.defineId(CaveDwellerEntity.class, EntityDataSerializers.BOOLEAN);
+      SPOTTED_ACCESSOR = SynchedEntityData.defineId(CaveDwellerEntity.class, EntityDataSerializers.BOOLEAN);
+      CLIMBING_ACCESSOR = SynchedEntityData.defineId(CaveDwellerEntity.class, EntityDataSerializers.BOOLEAN);
+   }
 }

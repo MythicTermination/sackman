@@ -2,7 +2,6 @@ package de.cadentem.cave_dweller.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-import de.cadentem.cave_dweller.CaveDweller;
 import de.cadentem.cave_dweller.entities.CaveDwellerEntity;
 import de.cadentem.cave_dweller.util.Utils;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -13,18 +12,16 @@ import software.bernie.geckolib3.renderers.geo.GeoLayerRenderer;
 import software.bernie.geckolib3.renderers.geo.IGeoRenderer;
 
 public class CaveDwellerEyesLayer extends GeoLayerRenderer<CaveDwellerEntity> {
-    public static ResourceLocation TEXTURE = new ResourceLocation(CaveDweller.MODID, "textures/entity/cave_dweller_eyes_texture" + Utils.getTextureAppend() + ".png");
+   public static ResourceLocation TEXTURE = new ResourceLocation("cave_dweller", "textures/entity/cave_dweller_eyes_texture" + Utils.getTextureAppend() + ".png");
 
-    public CaveDwellerEyesLayer(final IGeoRenderer<CaveDwellerEntity> renderer) {
-        super(renderer);
-    }
+   public CaveDwellerEyesLayer(IGeoRenderer<CaveDwellerEntity> renderer) {
+      super(renderer);
+   }
 
-    @Override
-    public void render(final PoseStack matrixStackIn, final MultiBufferSource bufferIn, int packedLightIn, final CaveDwellerEntity entityLivingBaseIn, float limbSwing, float limbSwingAmount, float partialTicks, float ageInTicks, float netHeadYaw, float headPitch) {
-        packedLightIn = 15728880;
-        RenderType eyesRenderType = RenderType.entityCutoutNoCull(TEXTURE);
-        VertexConsumer vertexConsumer = bufferIn.getBuffer(eyesRenderType);
-
-        getRenderer().render(getEntityModel().getModel(getEntityModel().getModelResource(entityLivingBaseIn)), entityLivingBaseIn, partialTicks, eyesRenderType, matrixStackIn, bufferIn, vertexConsumer, packedLightIn, OverlayTexture.NO_OVERLAY, 1.0F, 1.0F, 1.0F, 1.0F);
-    }
+   public void render(PoseStack matrixStackIn, MultiBufferSource bufferIn, int packedLightIn, CaveDwellerEntity entityLivingBaseIn, float limbSwing, float limbSwingAmount, float partialTicks, float ageInTicks, float netHeadYaw, float headPitch) {
+      packedLightIn = 15728880;
+      RenderType eyesRenderType = RenderType.entityCutoutNoCull(TEXTURE);
+      VertexConsumer vertexConsumer = bufferIn.getBuffer(eyesRenderType);
+      this.getRenderer().render(this.getEntityModel().getModel(this.getEntityModel().getModelResource(entityLivingBaseIn)), entityLivingBaseIn, partialTicks, eyesRenderType, matrixStackIn, bufferIn, vertexConsumer, packedLightIn, OverlayTexture.NO_OVERLAY, 1.0F, 1.0F, 1.0F, 1.0F);
+   }
 }
