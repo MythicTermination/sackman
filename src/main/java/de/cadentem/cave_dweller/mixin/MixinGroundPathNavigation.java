@@ -10,22 +10,25 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-@Mixin(GroundPathNavigation.class)
+@Mixin({GroundPathNavigation.class})
 public abstract class MixinGroundPathNavigation extends PathNavigation {
-    public MixinGroundPathNavigation(final Mob mob, final Level level) {
-        super(mob, level);
-    }
+   public MixinGroundPathNavigation(Mob mob, Level level) {
+      super(mob, level);
+   }
 
-    /**
-     * Won't crawl through 1x1 blocks without this<br>
-     * Only required due to the climbing mechanic - but checking for climbing here seems to cause other issues
-     */
-    @Inject(method = "canUpdatePath", at = @At("RETURN"), cancellable = true)
-    public void canUpdateWhenClimbing(final CallbackInfoReturnable<Boolean> cir) {
-        if (mob instanceof CaveDwellerEntity caveDweller) {
-            if (!cir.getReturnValue() && (!caveDweller.hasSpawned() || caveDweller.isCrawling())) {
-                cir.setReturnValue(true);
-            }
-        }
-    }
+   @Inject(
+      method = {"canUpdatePath"},
+      at = {@At("RETURN")},
+      cancellable = true
+   )
+   public void canUpdateWhenClimbing(CallbackInfoReturnable<Boolean> cir) {
+      Mob var3 = this.mob;
+      if (var3 instanceof CaveDwellerEntity) {
+         CaveDwellerEntity caveDweller = (CaveDwellerEntity)var3;
+         if (!(Boolean)cir.getReturnValue() && (!caveDweller.hasSpawned() || (Boolean)caveDweller.getEntityData().get(CaveDwellerEntity.CRAWLING_ACCESSOR))) {
+            cir.setReturnValue(true);
+         }
+      }
+
+   }
 }

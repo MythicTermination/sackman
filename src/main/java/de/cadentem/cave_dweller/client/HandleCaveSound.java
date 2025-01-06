@@ -10,23 +10,18 @@ import net.minecraft.util.RandomSource;
 import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.IForgeRegistry;
 
-/** Proxy class to avoid loading client code on the server-side */
 public class HandleCaveSound {
-    public static void handle(final CaveSound packet) {
-        IForgeRegistry<SoundEvent> soundEvents = ForgeRegistries.SOUND_EVENTS;
-
-        if (soundEvents == null) {
-            CaveDweller.LOG.error("Forge Sound registry was null while handling packet");
-            return;
-        }
-
-        SoundEvent soundEvent = soundEvents.getValue(packet.soundResource);
-
-        if (soundEvent == null) {
+   public static void handle(CaveSound packet) {
+      IForgeRegistry<SoundEvent> soundEvents = ForgeRegistries.SOUND_EVENTS;
+      if (soundEvents == null) {
+         CaveDweller.LOG.error("Forge Sound registry was null while handling packet");
+      } else {
+         SoundEvent soundEvent = (SoundEvent)soundEvents.getValue(packet.soundResource);
+         if (soundEvent == null) {
             CaveDweller.LOG.error("Sound Event [" + packet.soundResource + "] was null while handling packet");
-            return;
-        }
-
-        Minecraft.getInstance().getSoundManager().play(new SimpleSoundInstance(soundEvent, SoundSource.AMBIENT, 2.0F, 1.0F, RandomSource.create(), packet.playerPosition));
-    }
+         } else {
+            Minecraft.getInstance().getSoundManager().play(new SimpleSoundInstance(soundEvent, SoundSource.AMBIENT, 2.0F, 1.0F, RandomSource.create(), packet.playerPosition));
+         }
+      }
+   }
 }

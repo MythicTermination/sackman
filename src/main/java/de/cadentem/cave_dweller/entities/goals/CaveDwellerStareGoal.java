@@ -2,94 +2,81 @@ package de.cadentem.cave_dweller.entities.goals;
 
 import de.cadentem.cave_dweller.entities.CaveDwellerEntity;
 import de.cadentem.cave_dweller.util.Utils;
+import java.util.List;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.phys.Vec3;
 
-import java.util.List;
-
 public class CaveDwellerStareGoal extends Goal {
-    private final CaveDwellerEntity caveDweller;
+   private final CaveDwellerEntity caveDweller;
+   private boolean wasNotLookingPreviously;
+   private int lookedAtCount;
+   private final int lookedAtMax;
 
-    private boolean wasNotLookingPreviously;
-    private int lookedAtCount;
-    private final int lookedAtMax;
+   public CaveDwellerStareGoal(CaveDwellerEntity caveDweller) {
+      this.caveDweller = caveDweller;
+      this.lookedAtMax = caveDweller.getRandom().nextIntBetweenInclusive(8, 15);
+   }
 
-    public CaveDwellerStareGoal(final CaveDwellerEntity caveDweller) {
-        this.caveDweller = caveDweller;
-        lookedAtMax = caveDweller.getRandom().nextIntBetweenInclusive(4,13);
-    }
+   public boolean  canUse() {
+      if (this.caveDweller.isInvisible()) {
+         return false;
+      } else if (!Utils.isValidPlayer(this.caveDweller.getTarget())) {
+         return false;
+      } else {
+         return this.caveDweller.currentRoll == Roll.STARE;
+      }
+   }
 
-    @Override
-    public boolean canUse() {
-        if (caveDweller.isInvisible()) {
-            return false;
-        }
+   public boolean canContinueToUse() {
+      if (!Utils.isValidPlayer(this.caveDweller.getTarget())) {
+         return false;
+      } else {
+         return this.caveDweller.currentRoll == Roll.STARE;
+      }
+   }
 
-        if (!Utils.isValidTarget(caveDweller.getTarget())) {
-            return false;
-        }
+   public boolean requiresUpdateEveryTick() {
+      return true;
+   }
 
-        return caveDweller.currentRoll == Roll.STARE;
-    }
+   public void stop() {
+      super.stop();
+      this.lookedAtCount = 0;
+      this.wasNotLookingPreviously = false;
+      this.caveDweller.pleaseStopMoving = false;
+      this.caveDweller.getEntityData().set(CaveDwellerEntity.SPOTTED_ACCESSOR, false);
+   }
 
-    @Override
-    public boolean canContinueToUse() {
-        if (!Utils.isValidTarget(caveDweller.getTarget())) {
-            return false;
-        }
+   public void tick() {
+      LivingEntity target = this.caveDweller.getTarget();
+      if (target == null) {
+         this.caveDweller.disappear();
+      } else {
+         boolean actuallyLooking = this.caveDweller.targetIsFacingMe && target.hasLineOfSight(this.caveDweller);
+         if (this.wasNotLookingPreviously && actuallyLooking) {
+            ++this.lookedAtCount;
+         }
 
-        return caveDweller.currentRoll == Roll.STARE;
-    }
-
-    @Override
-    public boolean requiresUpdateEveryTick() {
-        return true;
-    }
-
-    @Override
-    public void stop() {
-        super.stop();
-        lookedAtCount = 0;
-        wasNotLookingPreviously = false;
-        caveDweller.pleaseStopMoving = false;
-        caveDweller.setSpotted(false);
-    }
-
-    @Override
-    public void tick() {
-        LivingEntity target = caveDweller.getTarget();
-
-        if (target == null) {
-            caveDweller.disappear();
-            return;
-        }
-
-        boolean actuallyLooking = caveDweller.targetIsFacingMe && target.hasLineOfSight(caveDweller);
-
-        if (wasNotLookingPreviously && actuallyLooking) {
-            lookedAtCount++;
-        }
-
-        if (lookedAtCount > lookedAtMax) {
-            if (!actuallyLooking && caveDweller.getRandom().nextDouble() < 0.1) {
-                caveDweller.disappear();
-            } else if (caveDweller.getRandom().nextDouble() < 0.3) {
-                caveDweller.pickRoll(List.of(Roll.CHASE, Roll.FLEE));
+         if (this.lookedAtCount > this.lookedAtMax && !actuallyLooking) {
+            if (this.caveDweller.getRandom().nextDouble() < 0.1D) {
+               this.caveDweller.disappear();
+            } else if (this.caveDweller.getRandom().nextDouble() < 0.3D) {
+               this.caveDweller.pickRoll(List.of(Roll.CHASE, Roll.FLEE));
             }
-        }
+         }
 
-        // Move towards the player when they are not looking
-        if (!actuallyLooking) {
-            caveDweller.pleaseStopMoving = false;
-            caveDweller.getNavigation().moveTo(target, 1);
-        } else {
-            caveDweller.pleaseStopMoving = true;
-            caveDweller.getNavigation().stop();
-            caveDweller.setDeltaMovement(Vec3.ZERO);
-        }
+         if (!actuallyLooking) {
+            this.caveDweller.pleaseStopMoving = false;
+            this.caveDweller.getNavigation().moveTo(target, 1.0D);
+         } else {
+            this.caveDweller.pleaseStopMoving = true;
+            this.caveDweller.getNavigation().stop();
+            this.caveDweller.setDeltaMovement(Vec3.ZERO);
+         }
 
-        caveDweller.getLookControl().setLookAt(target);
-        wasNotLookingPreviously = !actuallyLooking;
-    }
+         this.caveDweller.getLookControl().setLookAt(target);
+         this.wasNotLookingPreviously = !actuallyLooking;
+      }
+   }
 }

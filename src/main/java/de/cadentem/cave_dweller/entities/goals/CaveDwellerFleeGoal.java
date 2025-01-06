@@ -8,106 +8,96 @@ import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.phys.Vec3;
 
 public class CaveDwellerFleeGoal extends Goal {
-    private final CaveDwellerEntity caveDweller;
-    private final double speedModifier;
+   private final CaveDwellerEntity caveDweller;
+   private final double speedModifier;
+   private float ticksUntilLeave;
+   private float ticksUntilFlee;
+   private boolean shouldLeave;
+   private Path fleePath;
+   private int ticksUntilNextPathRecalculation;
 
-    private float ticksUntilLeave;
-    private float ticksUntilFlee;
-    private boolean shouldLeave;
-    private Path fleePath;
-    private int ticksUntilNextPathRecalculation;
+   public CaveDwellerFleeGoal(CaveDwellerEntity caveDweller, float ticksUntilLeave, double speedModifier) {
+      this.caveDweller = caveDweller;
+      this.ticksUntilLeave = ticksUntilLeave;
+      this.ticksUntilFlee = 10.0F;
+      this.speedModifier = speedModifier;
+   }
 
-    public CaveDwellerFleeGoal(final CaveDwellerEntity caveDweller, float ticksUntilLeave, double speedModifier) {
-        this.caveDweller = caveDweller;
-        this.ticksUntilLeave = ticksUntilLeave;
-        this.ticksUntilFlee = 10.0F;
-        this.speedModifier = speedModifier;
-    }
+   public boolean  canUse() {
+      if (this.caveDweller.isInvisible()) {
+         return false;
+      } else if (this.caveDweller.currentRoll != Roll.FLEE) {
+         return false;
+      } else {
+         return this.caveDweller.getTarget() != null;
+      }
+   }
 
-    @Override
-    public boolean canUse() {
-        if (caveDweller.isInvisible()) {
-            return false;
-        } else if (caveDweller.currentRoll != Roll.FLEE) {
-            return false;
-        } else {
-            return caveDweller.getTarget() != null;
-        }
-    }
+   public boolean canContinueToUse() {
+      if (this.caveDweller.currentRoll != Roll.FLEE) {
+         return false;
+      } else {
+         return this.caveDweller.getTarget() != null;
+      }
+   }
 
-    @Override
-    public boolean canContinueToUse() {
-        if (caveDweller.currentRoll != Roll.FLEE) {
-            return false;
-        } else {
-            return caveDweller.getTarget() != null;
-        }
-    }
+   public void start() {
+      this.setFleePath();
+      this.shouldLeave = false;
+   }
 
-    @Override
-    public void start() {
-        setFleePath();
-        shouldLeave = false;
-    }
+   public void tick() {
+      LivingEntity target = this.caveDweller.getTarget();
+      if (this.shouldLeave && !this.caveDweller.targetIsFacingMe) {
+         this.caveDweller.disappear();
+      }
 
-    @Override
-    public void tick() {
-        LivingEntity target = caveDweller.getTarget();
+      --this.ticksUntilFlee;
+      this.tickStareClock();
+      if (this.ticksUntilFlee <= 0.0F) {
+         this.fleeTick();
+         this.caveDweller.isFleeing = true;
+         this.caveDweller.getEntityData().set(CaveDwellerEntity.FLEEING_ACCESSOR, true);
+      } else if (target != null) {
+         this.caveDweller.getLookControl().setLookAt(target, 180.0F, 1.0F);
+      }
 
-        if (shouldLeave && !caveDweller.targetIsFacingMe) {
-            caveDweller.disappear();
-        }
+   }
 
-        --ticksUntilFlee;
-        tickStareClock();
+   private void setFleePath() {
+      LivingEntity target = this.caveDweller.getTarget();
+      if (target != null) {
+         Vec3 fleePosition = DefaultRandomPos.getPosAway(this.caveDweller, 32, 7, target.position());
+         if (fleePosition != null) {
+            this.fleePath = this.caveDweller.getNavigation().createPath(fleePosition.x, fleePosition.y, fleePosition.z, 0);
+         }
 
-        if (ticksUntilFlee <= 0.0F) {
-            fleeTick();
-            caveDweller.isFleeing = true;
-            caveDweller.getEntityData().set(CaveDwellerEntity.FLEEING_ACCESSOR, true);
-        } else if (target != null) {
-            caveDweller.getLookControl().setLookAt(target, 180.0F, 1.0F);
-        }
-    }
+      }
+   }
 
-    private void setFleePath() {
-        LivingEntity target = caveDweller.getTarget();
+   public void tickStareClock() {
+      --this.ticksUntilLeave;
+      if (this.ticksUntilLeave < 0.0F) {
+         this.shouldLeave = true;
+      }
 
-        if (target == null) {
-            return;
-        }
+   }
 
-        Vec3 fleePosition = DefaultRandomPos.getPosAway(caveDweller, 32, 7, target.position());
+   public void fleeTick() {
+      if (this.fleePath == null || this.fleePath.isDone()) {
+         this.setFleePath();
+      }
 
-        if (fleePosition != null) {
-            fleePath = caveDweller.getNavigation().createPath(fleePosition.x, fleePosition.y, fleePosition.z, 0);
-        }
-    }
+      this.caveDweller.playFleeSound();
+      this.ticksUntilNextPathRecalculation = Math.max(this.ticksUntilNextPathRecalculation - 1, 0);
+      if (this.ticksUntilNextPathRecalculation == 0) {
+         this.ticksUntilNextPathRecalculation = 2;
+         if (!this.caveDweller.getNavigation().moveTo(this.fleePath, this.speedModifier)) {
+            this.ticksUntilNextPathRecalculation += 2;
+         }
 
-    public void tickStareClock() {
-        --ticksUntilLeave;
+         this.ticksUntilNextPathRecalculation = this.adjustedTickDelay(this.ticksUntilNextPathRecalculation);
+      }
 
-        if (ticksUntilLeave < 0.0F) {
-            shouldLeave = true;
-        }
-    }
-
-    public void fleeTick() {
-        if (fleePath == null || fleePath.isDone()) {
-            setFleePath();
-        }
-
-        caveDweller.playFleeSound();
-        ticksUntilNextPathRecalculation = Math.max(ticksUntilNextPathRecalculation - 1, 0);
-
-        if (ticksUntilNextPathRecalculation == 0) {
-            ticksUntilNextPathRecalculation = 2;
-
-            if (!caveDweller.getNavigation().moveTo(fleePath, speedModifier)) {
-                ticksUntilNextPathRecalculation += 2;
-            }
-
-            ticksUntilNextPathRecalculation = adjustedTickDelay(ticksUntilNextPathRecalculation);
-        }
-    }
+   }
 }

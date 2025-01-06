@@ -1,7 +1,6 @@
 package de.cadentem.cave_dweller.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
-import de.cadentem.cave_dweller.CaveDweller;
 import de.cadentem.cave_dweller.entities.CaveDwellerEntity;
 import de.cadentem.cave_dweller.util.Utils;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -11,29 +10,28 @@ import org.jetbrains.annotations.NotNull;
 import software.bernie.geckolib.renderer.GeoEntityRenderer;
 
 public class CaveDwellerRenderer extends GeoEntityRenderer<CaveDwellerEntity> {
-    public CaveDwellerRenderer(final EntityRendererProvider.Context context) {
-        super(context, new CaveDwellerModel());
-        this.shadowRadius = 0.3F;
+   public CaveDwellerRenderer(final EntityRendererProvider.Context context) {
+      super(context, new CaveDwellerModel());
+      this.shadowRadius = 0.3F;
 
-        addRenderLayer(new CaveDwellerEyesLayer(this));
-    }
+      addRenderLayer(new CaveDwellerEyesLayer(this));
+   }
 
-    @Override // TODO :: Is this even used?
-    public @NotNull ResourceLocation getTextureLocation(@NotNull final CaveDwellerEntity instance) {
-        return new ResourceLocation(CaveDweller.MODID, "textures/entity/cave_dweller_texture" + Utils.getTextureAppend() + ".png");
-    }
+   @NotNull
+   public ResourceLocation getTextureLocation(@NotNull CaveDwellerEntity instance) {
+      return new ResourceLocation("cave_dweller", "textures/entity/cave_dweller_texture" + Utils.getTextureAppend() + ".png");
+   }
 
-    @Override // FIXME :: In some cases this does not get called, resulting in an invisible entity?
-    public void render(final CaveDwellerEntity entity, float entityYaw, float partialTick, @NotNull final PoseStack poseStack, @NotNull final MultiBufferSource bufferSource, int packedLight) {
-        poseStack.pushPose();
+   public void render(CaveDwellerEntity entity, float entityYaw, float partialTick, @NotNull PoseStack poseStack, @NotNull MultiBufferSource bufferSource, int packedLight) {
+      poseStack.pushPose();
+      if (entity.isBaby()) {
+         poseStack.scale(0.1F, 0.1F, 0.1F);
+      } else {
+         poseStack.
+      scale(1.3F, 1.3F, 1.3F);
+      }
 
-        if (entity.isBaby()) {
-            poseStack.scale(0.1F, 0.1F, 0.1F);
-        } else {
-            poseStack.scale(1.3F, 1.3F, 1.3F);
-        }
-
-        super.render(entity, entityYaw, partialTick, poseStack, bufferSource, packedLight);
-        poseStack.popPose();
-    }
+      super.render(entity, entityYaw, partialTick, poseStack, bufferSource, packedLight);
+      poseStack.popPose();
+   }
 }
