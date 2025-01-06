@@ -6,7 +6,7 @@
 * Fixed some issues
 
 # Installation
-Requires GeckoLib: https://www.curseforge.com/minecraft/mc-mods/geckolib/files?version=1.19.2&gameVersionTypeId=1
+Requires GeckoLib: https://www.curseforge.com/minecraft/mc-mods/geckolib/files?version=1.19.4&gameVersionTypeId=1
 
 # Other
 Recommend using https://www.curseforge.com/minecraft/texture-packs/creepier-cave-dwellers
