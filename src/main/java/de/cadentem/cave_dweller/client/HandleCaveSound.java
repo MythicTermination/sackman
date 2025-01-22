@@ -1,0 +1,26 @@
+package de.cadentem.cave_dweller.client;
+
+import de.cadentem.cave_dweller.CaveDweller;
+import de.cadentem.cave_dweller.network.CaveSound;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.resources.sounds.SimpleSoundInstance;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.sounds.SoundSource;
+import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraftforge.registries.IForgeRegistry;
+
+public class HandleCaveSound {
+   public static void handle(CaveSound packet) {
+      IForgeRegistry<SoundEvent> soundEvents = ForgeRegistries.SOUND_EVENTS;
+      if (soundEvents == null) {
+         CaveDweller.LOG.error("Forge Sound registry was null while handling packet");
+      } else {
+         SoundEvent soundEvent = (SoundEvent)soundEvents.getValue(packet.soundResource);
+         if (soundEvent == null) {
+            CaveDweller.LOG.error("Sound Event [" + packet.soundResource + "] was null while handling packet");
+         } else {
+            Minecraft.getInstance().getSoundManager().play(new SimpleSoundInstance(soundEvent, SoundSource.AMBIENT, 2.0F, 1.0F, packet.playerPosition));
+         }
+      }
+   }
+}
